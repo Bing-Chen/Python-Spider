@@ -1,0 +1,85 @@
+# -*- coding:utf-8 -*-
+import time
+import requests
+import re
+from bs4 import BeautifulSoup
+import time
+
+
+class Innovation:
+    def __init__(self):
+        self.loginUrl = 'https://tool-gsc-c.cn.ao.ericsson.se:8643/harbor/login?service=http://tool-gsc-c.cn.ao.ericsson.se:8780/lighthouse/shiro-cas'
+        # the out put part should be from 226-2003
+        self.outputurl = 'http://tool-gsc-c.cn.ao.ericsson.se:8780/lighthouse/tool/getToolInfo.action?queryId='
+        self.session = requests.session()  # has the function as requests
+        self.username = 'ebigchn'
+        self.password = 'Chuangguandong1'
+
+    def login(self):
+        username = self.username
+        password = self.password
+        login_url = self.loginUrl
+        session = self.session
+        lt = BeautifulSoup(session.get(login_url).content).find('input', attrs={'name': 'lt'})['value']
+        # captcha_content = session.get('http://www.zhihu.com/captcha.gif?r=%d' % (time.time() * 1000)).content
+        data = {
+            'username': username,
+            'password': password,
+            'lt': lt,
+            'execution': 'e1s1',
+            '_eventId':'submit'
+        }
+        resp = session.post(login_url, data).content
+        fileopen=open('innovation_text.txt','w+')
+        fileopen.write(resp)
+        return session
+
+    def getpage(self,session): # handle the truely pages
+        output_url=str(self.outputurl) # find the
+        pattern = re.compile(r'(<td align="left">)(.*?)(</td>)')
+        temp_list=['Name: ','Innovator: ','Developer: ','Publish Date: ']
+        output_list=[]
+        for count in range(226, 240):
+            print 'Spidering the page'+str(count)+'.......!'
+            soup=BeautifulSoup(session.get(output_url+str(count)).content,'lxml')
+            temp=0
+            flag=1  # If empty, no need to output the keywords
+            flag_Innovator = 0  # In case of the innovator is empty
+            for result in soup.find_all('td', align="left")[3:7]:
+                if re.match(pattern,str(result)).group(2) != '':  # some pages are missing based on the pageNum
+                    output_list.append(temp_list[temp]+re.match(pattern, str(result)).group(2))
+                    # print temp_list[temp]+re.match(pattern,str(result)).group(2)
+                    temp+=1
+                    flag_Innovator=1
+                elif flag_Innovator==1:
+                    output_list.append(temp_list[temp]+re.match(pattern,str(result)).group(2))#the Innovator maybe is empty
+                    temp+= 1
+                else:
+                    flag = 0
+                    break
+
+            # add the keywords to list
+            if flag != 0:
+                output_list.append('Keywords: '+soup.find(href=re.compile('(\/lighthouse\?searchWord=.*?)')).string)
+        return output_list
+
+    @staticmethod
+    def save_file(output_list):
+        f=open('Innovation_output.txt', 'w+')
+        for i in output_list:
+            f.write(i+'\n')
+        f.close
+        print 'Output Finish'
+
+
+def main():
+    start = time.clock()
+    test = Innovation()
+    session = test.login()  # get the session and login information based
+    output_list = test.getpage(session)
+    test.save_file(output_list)
+    elapsed = (time.clock() - start)
+    print("Time used:", elapsed)
+
+if __name__ == '__main__':
+    main()
